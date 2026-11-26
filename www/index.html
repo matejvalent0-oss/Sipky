@@ -73,6 +73,7 @@ details{margin-bottom:10px}summary{cursor:pointer;color:var(--mut)}
  <div class="pad" id="pad"></div>
  <div class="row" style="margin-top:10px"><button id="bv" class="on">🔊 Hlas zap.</button><button id="nw">Nová hra</button></div>
  <div id="vi" class="mut" style="margin-top:6px"></div>
+ <button id="bi" hidden style="margin-top:6px">Nainštalovať hlas</button>
 </div>
 </main>
 
@@ -146,19 +147,34 @@ function spk(l){return l==="Bull"?"stred":l==="25"?"vonkajší stred":l==="0"?"m
 const bodov=v=>v===1?"bod":v>=2&&v<=4?"body":"bodov";
 function nxt(){return "hráč "+(S.cur+1)+"."}
 function hintSay(){const h=hn();return h?" Ukončenie: "+h.map(spk).join(", ")+".":""}
-let VO=null;
+let VO=null,NL=null;
+const NT=()=>{const c=window.Capacitor;return c&&c.Plugins&&c.Plugins.TextToSpeech};
 function pickVoice(){
+ if(NT())return;
  try{const v=speechSynthesis.getVoices();VO=v.find(x=>/^sk/i.test(x.lang))||v.find(x=>/^cs/i.test(x.lang))||null}catch(e){}
  $("#vi").textContent=VO?"Hlas: "+VO.name+" ("+VO.lang+")":"Slovenský ani český hlas sa nenašiel (alebo ho telefón nezverejňuje). Nainštaluj ho: Nastavenia, Text-to-speech, Google, slovenčina.";
 }
 if("speechSynthesis" in window){speechSynthesis.onvoiceschanged=pickVoice;pickVoice()}
+async function pickNative(){
+ const T=NT();if(!T)return;
+ for(const l of["sk-SK","cs-CZ"]){
+  try{if((await T.isLanguageSupported({lang:l})).supported){NL=l;break}}catch(e){}
+ }
+ $("#vi").textContent=NL?"Hlas: "+(NL==="sk-SK"?"slovenčina":"čeština")+" (telefón)":"V telefóne chýba slovenský aj český hlas. Ťukni na Nainštalovať hlas.";
+ $("#bi").hidden=!!NL;
+}
+$("#bi").onclick=()=>{try{NT().openInstall()}catch(e){}};
+pickNative();
 function talk(t){
- if(!voice||!("speechSynthesis" in window))return;
+ if(!voice)return;
+ const T=NT();
+ if(T){try{T.speak({text:t,lang:NL||"sk-SK",rate:1,pitch:1,volume:1,queueStrategy:0}).catch(()=>{})}catch(e){}return}
+ if(!("speechSynthesis" in window))return;
  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);if(VO){u.voice=VO;u.lang=VO.lang.replace("_","-")}else u.lang="sk-SK";speechSynthesis.speak(u)}catch(e){}
 }
 $("#bv").onclick=()=>{
  voice=!voice;$("#bv").classList.toggle("on",voice);$("#bv").textContent=voice?"🔊 Hlas zap.":"🔇 Hlas vyp.";
- if(voice)talk("Hlas zapnutý.");else try{speechSynthesis.cancel()}catch(e){}
+ if(voice)talk("Hlas zapnutý.");else{try{speechSynthesis.cancel()}catch(e){}try{NT().stop()}catch(e){}}
 };
 function endTurn(extra){
  S.cur=(S.cur+1)%S.p.length;S.darts=[];S.start=S.p[S.cur].left;base=null;P=null;draw();
@@ -392,7 +408,7 @@ setInterval(()=>{
   if(base)say("Zachytené: "+lab(q.n,q.m)+" ("+q.n*q.m+"). Ak nesedí, daj Späť, ťukni na správne miesto a ✓.");
  }
 },200);
-const VER="3";
+const VER="4";
 $("#ver").textContent="Verzia "+VER;
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
