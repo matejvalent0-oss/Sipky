@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - package.json
+      - capacitor.config.json
+      - debug.keystore
+      - .github/workflows/build-apk.yml
 
 permissions:
   contents: write
@@ -26,6 +31,17 @@ jobs:
       - name: Install
         run: npm install
 
+      - name: Web address of the app
+        run: |
+          node -e '
+          const fs=require("fs");
+          const [o,r]=process.env.GITHUB_REPOSITORY.split("/");
+          const c=JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
+          c.server={url:"https://"+o.toLowerCase()+".github.io/"+r+"/"};
+          fs.writeFileSync("capacitor.config.json",JSON.stringify(c,null,2));
+          '
+          cat capacitor.config.json
+
       - name: Add Android project
         run: npx cap add android
 
@@ -33,6 +49,11 @@ jobs:
         run: |
           sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
           grep -n "CAMERA" android/app/src/main/AndroidManifest.xml
+
+      - name: Fixed signing key
+        run: |
+          mkdir -p ~/.android
+          if [ -f debug.keystore ]; then cp debug.keystore ~/.android/debug.keystore; fi
 
       - name: Build APK
         run: |
