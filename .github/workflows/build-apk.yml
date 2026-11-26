@@ -33,13 +33,18 @@ jobs:
 
       - name: Web address of the app
         run: |
-          node -e '
-          const fs=require("fs");
-          const [o,r]=process.env.GITHUB_REPOSITORY.split("/");
-          const c=JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
-          c.server={url:"https://"+o.toLowerCase()+".github.io/"+r+"/"};
-          fs.writeFileSync("capacitor.config.json",JSON.stringify(c,null,2));
-          '
+          URL="https://$(echo "${GITHUB_REPOSITORY%%/*}" | tr A-Z a-z).github.io/${GITHUB_REPOSITORY#*/}/"
+          if curl -fsS -o /dev/null "${URL}sw.js"; then
+            echo "Site is live, the app will load from $URL"
+            URL="$URL" node -e '
+            const fs=require("fs");
+            const c=JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
+            c.server={url:process.env.URL};
+            fs.writeFileSync("capacitor.config.json",JSON.stringify(c,null,2));
+            '
+          else
+            echo "Site is not live yet, the app will contain its own copy"
+          fi
           cat capacitor.config.json
 
       - name: Add Android project
@@ -47,7 +52,7 @@ jobs:
 
       - name: Allow camera
         run: |
-          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <queries>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n</manifest>#' android/app/src/main/AndroidManifest.xml
           grep -n "CAMERA" android/app/src/main/AndroidManifest.xml
 
       - name: Fixed signing key
