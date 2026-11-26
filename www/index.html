@@ -27,6 +27,7 @@ button.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
 .sb .cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .big{font-size:44px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
 #tn{font-weight:700;margin:4px 0}
+#co{font-weight:700;color:var(--acc);min-height:22px;margin:2px 0}
 .chip{display:inline-block;border:1px solid var(--ln);border-radius:6px;padding:1px 8px;margin:0 4px 4px 0;background:var(--card)}
 #ms{min-height:42px;margin:4px 0 8px}
 #cam{position:relative;display:none;margin-bottom:8px}
@@ -42,18 +43,21 @@ details{margin-bottom:10px}summary{cursor:pointer;color:var(--mut)}
 <div id="setup">
  <h1>🎯 Šípky</h1>
  <div class="card">
-  <label>Hra<select id="g"><option>301</option><option selected>501</option><option>701</option></select></label>
+  <label>Hra<select id="g"><option>301</option><option selected>501</option><option>701</option><option value="around">Tréning: Okolo hodín</option><option value="doubles">Tréning: Double</option><option value="checkout">Tréning: Ukončenie</option></select></label>
   <label>Počet hráčov<select id="n"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
   <label>Ukončenie dvojitým poľom<input type="checkbox" id="dbl" checked></label>
   <button id="st" class="p" style="width:100%">Začať hru</button>
  </div>
  <div class="card mut">Skóre zadávaš klávesnicou alebo kamerou. Kamera navrhne zásah, ty ho potvrdíš alebo opravíš ťuknutím na obraz.</div>
+ <div class="mut" id="ver" style="text-align:center"></div>
 </div>
 
 <div id="game" hidden>
  <div class="sb" id="sb"></div>
  <div id="tn"></div>
  <div id="ds"></div>
+ <div id="co"></div>
+ <div id="sm" class="card" hidden></div>
  <div id="ms" class="mut" role="status"></div>
 
  <details>
@@ -67,7 +71,8 @@ details{margin-bottom:10px}summary{cursor:pointer;color:var(--mut)}
 
  <div class="row" id="ml"><button data-m="1" class="on">Single</button><button data-m="2">Double</button><button data-m="3">Triple</button></div>
  <div class="pad" id="pad"></div>
- <div class="row" style="margin-top:10px"><button id="nw">Nová hra</button></div>
+ <div class="row" style="margin-top:10px"><button id="bv" class="on">🔊 Hlas zap.</button><button id="nw">Nová hra</button></div>
+ <div id="vi" class="mut" style="margin-top:6px"></div>
 </div>
 </main>
 
@@ -107,43 +112,137 @@ function lab(n,m){return n===0?"0":n===25?(m===2?"Bull":"25"):(m===3?"T":m===2?"
 function proposal(){if(!P||!Hi)return null;const[bx,by]=ap(Hi,P[0],P[1]);return sc(bx,by)}
 
 /* ---------- hra ---------- */
-function snap(){S.hist.push(JSON.stringify({p:S.p,cur:S.cur,darts:S.darts,start:S.start,win:S.win}))}
+function snap(){S.hist.push(JSON.stringify({p:S.p,cur:S.cur,darts:S.darts,start:S.start,win:S.win,idx:S.idx,hits:S.hits,thr:S.thr,att:S.att,ok:S.ok}))}
+/* ---------- odporúčania a hlas ---------- */
+let voice=true;
+const DA=[];for(let i=1;i<=20;i++)DA.push({l:""+i,v:i},{l:"D"+i,v:2*i},{l:"T"+i,v:3*i});DA.push({l:"25",v:25},{l:"Bull",v:50});
+const PD=[20,16,8,10,12,18,4,14,6,2,1,19,17,15,13,11,9,7,5,3];
+const fp=(l,dbl)=>dbl?(l==="Bull"?4:PD.indexOf(+l.slice(1))):(l[0]==="T"?2:l[0]==="D"?1:0);
+function co(r,n,dbl){
+ if(r<1||r>(dbl?170:180)||n<1)return null;
+ const fin=new Map();
+ for(const d of DA){
+  if(dbl&&d.l[0]!=="D"&&d.l!=="Bull")continue;
+  const o=fin.get(d.v);if(!o||fp(d.l,dbl)<fp(o.l,dbl))fin.set(d.v,d);
+ }
+ let best=null,bs=1e9;
+ const test=seq=>{
+  const o=fin.get(r-seq.reduce((a,d)=>a+d.v,0));if(!o)return;
+  const sc=(seq.length+1)*1000+fp(o.l,dbl)*5+seq.reduce((a,d)=>a+(60-d.v)/4+(d.l[0]==="D"?.01:d.l[0]==="T"?.02:0),0);
+  if(sc<bs){bs=sc;best=[...seq.map(d=>d.l),o.l]}
+ };
+ test([]);
+ if(n>1)for(const a of DA){test([a]);if(n>2)for(const b of DA)test([a,b])}
+ return best;
+}
+function hn(){return S&&S.win==null?co(S.p[S.cur].left,3-S.darts.length,S.dbl):null}
+function hintText(){
+ if(!S||S.win!=null)return "";
+ const h=hn();if(h)return "Ukončenie: "+h.join(", ");
+ const g=co(S.p[S.cur].left,3,S.dbl);
+ return g&&S.darts.length?"V tomto kole sa nedá ukončiť. Ďalšie kolo: "+g.join(", "):"";
+}
+function spk(l){return l==="Bull"?"stred":l==="25"?"vonkajší stred":l==="0"?"mimo":l[0]==="T"?"trojnásobok "+l.slice(1):l[0]==="D"?"dvojnásobok "+l.slice(1):l}
+const bodov=v=>v===1?"bod":v>=2&&v<=4?"body":"bodov";
+function nxt(){return "hráč "+(S.cur+1)+"."}
+function hintSay(){const h=hn();return h?" Ukončenie: "+h.map(spk).join(", ")+".":""}
+let VO=null;
+function pickVoice(){
+ try{const v=speechSynthesis.getVoices();VO=v.find(x=>/^sk/i.test(x.lang))||v.find(x=>/^cs/i.test(x.lang))||null}catch(e){}
+ $("#vi").textContent=VO?"Hlas: "+VO.name+" ("+VO.lang+")":"Slovenský ani český hlas sa nenašiel (alebo ho telefón nezverejňuje). Nainštaluj ho: Nastavenia, Text-to-speech, Google, slovenčina.";
+}
+if("speechSynthesis" in window){speechSynthesis.onvoiceschanged=pickVoice;pickVoice()}
+function talk(t){
+ if(!voice||!("speechSynthesis" in window))return;
+ try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);if(VO){u.voice=VO;u.lang=VO.lang.replace("_","-")}else u.lang="sk-SK";speechSynthesis.speak(u)}catch(e){}
+}
+$("#bv").onclick=()=>{
+ voice=!voice;$("#bv").classList.toggle("on",voice);$("#bv").textContent=voice?"🔊 Hlas zap.":"🔇 Hlas vyp.";
+ if(voice)talk("Hlas zapnutý.");else try{speechSynthesis.cancel()}catch(e){}
+};
 function endTurn(extra){
  S.cur=(S.cur+1)%S.p.length;S.darts=[];S.start=S.p[S.cur].left;base=null;P=null;draw();
  say((extra||"")+(V.videoWidth?" Vytiahni šípky, kamera to zistí sama (alebo ulož základ 📸).":""));
 }
+const avg=p=>(p.n?p.pts/p.n*3:0).toFixed(1).replace(".",",");
+function newT(){
+ const p=S.p[0];let r;
+ do r=2+Math.floor(Math.random()*169);while(!co(r,3,S.dbl));
+ p.left=S.start=r;
+}
+function tgl(){const t=S.idx<20?S.idx+1:25;return t===25?"Bull":S.mode==="around"?""+t:"D"+t}
+function trainHit(n,m){
+ snap();
+ const tg=S.idx<20?S.idx+1:25,ok=n===tg&&(S.mode==="around"||m===2);
+ S.thr++;S.darts.push(lab(n,m));
+ if(ok){S.hits++;S.idx++}
+ let t=spk(lab(n,m))+".";
+ if(S.idx>=21){S.win=0;render();return talk(t+" Zásah! Hotovo za "+S.thr+" šípov. Presnosť "+Math.round(100*S.hits/S.thr)+" percent.")}
+ t+=ok?" Zásah! Ďalší cieľ "+spk(tgl())+".":" Cieľ stále "+spk(tgl())+".";
+ if(S.darts.length===3){render();endTurn("Tri šípy hotové.");render()}else{say("");render()}
+ talk(t);
+}
 function hit(n,m){
  if(!S||S.win!=null)return;
+ if(S.mode==="around"||S.mode==="doubles")return trainHit(n,m);
  snap();
- const p=S.p[S.cur],rest=p.left-n*m;
- S.darts.push(lab(n,m));
+ const i=S.cur,p=S.p[i],v=n*m,rest=p.left-v,ck=S.mode==="checkout";
+ S.darts.push(lab(n,m));p.n++;
+ const t=p.name+", "+spk(lab(n,m))+(v?", "+v+" "+bodov(v):"")+".";
  const bust=rest<0||(S.dbl&&(rest===1||(rest===0&&m!==2)));
- if(bust){p.left=S.start;const b=S.p[S.cur].name+": prestrelené, skóre sa vracia na "+p.left+".";render();endTurn(b);render();return}
- p.left=rest;
- if(rest===0){S.win=S.cur;say("");render();return}
- if(S.darts.length===3){render();endTurn("Tri šípy hotové.");render();return}
+ if(bust){
+  p.pts-=S.start-p.left;p.left=S.start;
+  const b=p.name+": prestrelené, skóre sa vracia na "+p.left+".";
+  if(ck){S.att++;render();endTurn("Neúspech.");newT();render();return talk(t+" Neúspech. Nový cieľ "+p.left+"."+hintSay())}
+  render();endTurn(b);render();
+  return talk(t+" Prestrelené. Zostáva "+p.left+". Na rade "+nxt()+hintSay());
+ }
+ p.left=rest;p.pts+=v;
+ if(rest===0){
+  p.best=Math.max(p.best,S.start);
+  if(ck){S.att++;S.ok++;render();endTurn("Úspech!");newT();render();return talk(t+" Úspech! Nový cieľ "+p.left+"."+hintSay())}
+  S.win=i;say("");render();
+  return talk(t+" "+p.name+" vyhráva. Gratulujem! Priemer "+Math.round(p.pts/p.n*3)+" bodov.");
+ }
+ if(S.darts.length===3){
+  const tot=S.start-rest;p.best=Math.max(p.best,tot);
+  if(ck){S.att++;render();endTurn("Neúspech.");newT();render();return talk(t+" Neúspech. Nový cieľ "+p.left+"."+hintSay())}
+  render();endTurn("Tri šípy hotové.");render();
+  return talk(t+" Spolu "+tot+" "+bodov(tot)+". Zostáva "+rest+". Na rade "+nxt()+hintSay());
+ }
  say("");render();
+ talk(t+" Zostáva "+rest+"."+hintSay());
 }
 function render(){
- $("#sb").innerHTML=S.p.map((p,i)=>`<div class="card${i===S.cur&&S.win==null?" cur":""}"><div class="mut">${p.name}${S.win===i?" 🏆":""}</div><div class="big">${p.left}</div></div>`).join("");
- $("#tn").textContent=S.win!=null?"Víťaz: "+S.p[S.win].name+" 🎉":"Na rade: "+S.p[S.cur].name+", šíp "+(S.darts.length+1)+" z 3";
+ $("#co").textContent=hintText();
+ const m=S.mode,tr=m==="around"||m==="doubles",w=S.win!=null;
+ if(tr){
+  $("#sb").innerHTML=`<div class="card"><div class="mut">${m==="around"?"Okolo hodín":"Double tréning"}</div><div class="big">${w?"✓":tgl()}</div><div class="mut">zásahy ${S.hits} z 21, šípov ${S.thr}${S.thr?", presnosť "+Math.round(100*S.hits/S.thr)+" %":""}</div></div>`;
+  $("#tn").textContent=w?"Hotovo za "+S.thr+" šípov":"Šíp "+(S.darts.length+1)+" z 3";
+ }else{
+  $("#sb").innerHTML=S.p.map((p,i)=>`<div class="card${i===S.cur&&!w?" cur":""}"><div class="mut">${p.name}${S.win===i?" 🏆":""}</div><div class="big">${p.left}</div><div class="mut">${p.n?"priemer "+avg(p):"&nbsp;"}</div></div>`).join("");
+  $("#tn").textContent=w?"Víťaz: "+S.p[S.win].name+" 🎉":m==="checkout"?"Tréning ukončenia: úspešné "+S.ok+" z "+S.att+(S.att?" ("+Math.round(100*S.ok/S.att)+" %)":"")+", šíp "+(S.darts.length+1)+" z 3":"Na rade: "+S.p[S.cur].name+", šíp "+(S.darts.length+1)+" z 3";
+ }
  $("#ds").innerHTML=S.darts.map(d=>`<span class="chip">${d}</span>`).join("");
+ const sm=$("#sm");sm.hidden=!(w&&m==="x01");
+ if(!sm.hidden)sm.innerHTML="<b>Štatistika</b>"+S.p.map(p=>`<div>${p.name}: priemer ${avg(p)} (3 šípy), šípov ${p.n}, najlepšie kolo ${p.best}</div>`).join("");
 }
 $("#st").onclick=()=>{
- const N=+$("#g").value,n=+$("#n").value;base=null;
- S={dbl:$("#dbl").checked,p:Array.from({length:n},(_,i)=>({name:"Hráč "+(i+1),left:N})),cur:0,darts:[],start:N,win:null,hist:[]};
+ const g=$("#g").value,tr=isNaN(+g),N=tr?0:+g,n=tr?1:+$("#n").value;base=null;
+ S={mode:tr?g:"x01",dbl:$("#dbl").checked,p:Array.from({length:n},(_,i)=>({name:"Hráč "+(i+1),left:N,pts:0,n:0,best:0})),cur:0,darts:[],start:N,win:null,hist:[],att:0,ok:0,idx:0,hits:0,thr:0};
+ if(g==="checkout")newT();
  $("#setup").hidden=true;$("#game").hidden=false;render();say("");
+ talk(tr?(g==="around"?"Tréning okolo hodín. Cieľ 1.":g==="doubles"?"Tréning double. Cieľ dvojnásobok 1.":"Tréning ukončenia. Cieľ "+S.p[0].left+"."+hintSay()):"Hra "+N+" začína. Na rade hráč 1.");
 };
 $("#nw").onclick=()=>{$("#game").hidden=true;$("#setup").hidden=false;P=null;draw()};
 $("#bu").onclick=()=>{const h=S&&S.hist.pop();if(h){Object.assign(S,JSON.parse(h));P=null;draw();render();say("Posledný šíp vrátený.")}};
 
 /* ---------- klávesnica ---------- */
-$("#pad").innerHTML=[...Array(20)].map((_,i)=>`<button data-n="${i+1}">${i+1}</button>`).join("")+`<button data-n="25">25</button><button data-n="0">Mimo</button>`;
+$("#pad").innerHTML=[...Array(20)].map((_,i)=>`<button data-n="${i+1}">${i+1}</button>`).join("")+`<button data-n="25" data-b="1" style="grid-column:span 2">25</button><button data-n="25" data-b="2" class="p" style="grid-column:span 2">Bull 50</button><button data-n="0">Mimo</button>`;
 $("#pad").onclick=e=>{
  const n=e.target.dataset.n;if(n===undefined||!S)return;
- const k=+n;
- if(k===25&&mult===3)return say("Triple 25 neexistuje.");
- hit(k,k?mult:0);setMult(1);if(base&&V.videoWidth)base=grab();
+ const k=+n,b=+e.target.dataset.b;
+ hit(k,k===25?b:k?mult:0);setMult(1);if(base&&V.videoWidth)base=grab();
 };
 function setMult(m){mult=m;document.querySelectorAll("#ml button").forEach(b=>b.classList.toggle("on",+b.dataset.m===m))}
 $("#ml").onclick=e=>{if(e.target.dataset.m)setMult(+e.target.dataset.m)};
@@ -293,6 +392,9 @@ setInterval(()=>{
   if(base)say("Zachytené: "+lab(q.n,q.m)+" ("+q.n*q.m+"). Ak nesedí, daj Späť, ťukni na správne miesto a ✓.");
  }
 },200);
+const VER="3";
+$("#ver").textContent="Verzia "+VER;
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
 </html>
