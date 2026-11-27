@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Šípky – počítadlo</title>
+<style>
+:root{--bg:#0f121a;--pn:#171c28;--pn2:#1f2536;--ln:#2a3248;--ink:#eef1f8;--mut:#8b95ab;--ac:#2ee59d;--ac2:#f5b942;--bad:#ff5d6c;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:10px 12px 28px}
+h1{font-size:26px;margin:6px 0 14px;font-weight:800}
+.panel{background:var(--pn);border:1px solid var(--ln);border-radius:14px;padding:12px;margin-bottom:10px}
+.mut{color:var(--mut);font-size:13px}
+label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0}
+select,button{font:inherit;color:var(--ink);background:var(--pn2);border:1px solid var(--ln);border-radius:10px;padding:10px 12px}
+button{cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.98)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.go{width:100%;background:var(--ac);border-color:var(--ac);color:#06241a;font-weight:800;font-size:17px;padding:14px}
+button.on,button.p{background:var(--ac);color:#06241a;border-color:var(--ac);font-weight:700}
+.row{display:flex;gap:8px;margin:8px 0}.row>*{flex:1 1 0}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:8px}.bar b{font-size:15px}.sp{flex:1}
+.ib{padding:8px 12px}
+#sb{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.tile{background:var(--pn);border:1px solid var(--ln);border-radius:14px;padding:10px 12px;text-align:center}
+.tile.cur{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac),0 0 18px rgba(46,229,157,.25)}
+.tile .nm{font-size:13px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .big{font-size:56px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;margin:4px 0}
+.tile.cur .big{color:var(--ac)}
+.turn{display:flex;align-items:center;gap:8px;margin:10px 0 6px;flex-wrap:wrap}
+#tn{font-weight:700}
+.chip{display:inline-block;border:1px solid var(--ln);background:var(--pn2);border-radius:8px;padding:2px 10px;margin-right:4px;font-weight:700}
+#co{background:rgba(245,185,66,.12);border:1px solid var(--ac2);color:var(--ac2);border-radius:10px;padding:8px 12px;font-weight:700;margin:6px 0}
+#co:empty{display:none}
+#sm div{margin:2px 0}
+#bd{display:block;width:100%;max-width:400px;margin:8px auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#ms{min-height:20px;margin:4px 0}
+#cam{position:relative;display:none;margin:8px 0}
+#cam video,#cam canvas{width:100%;display:block;border-radius:12px}
+#cam canvas{position:absolute;inset:0;height:100%}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pad button{padding:12px 0;font-weight:700}
+details{margin:10px 0}summary{cursor:pointer;color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<div id="setup">
+ <h1>🎯 Šípky</h1>
+ <div class="panel">
+  <label>Hra<select id="g"><option>301</option><option selected>501</option><option>701</option><option value="around">Tréning: Okolo hodín</option><option value="doubles">Tréning: Double</option><option value="checkout">Tréning: Ukončenie</option></select></label>
+  <label>Počet hráčov<select id="n"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+  <label>Súper bot<select id="bot"><option value="0" selected>Bez bota</option><option value="30">Bot, priemer 30</option><option value="40">Bot, priemer 40</option><option value="50">Bot, priemer 50</option><option value="60">Bot, priemer 60</option><option value="70">Bot, priemer 70</option><option value="80">Bot, priemer 80</option><option value="90">Bot, priemer 90</option><option value="100">Bot, priemer 100</option></select></label>
+  <label>Ukončenie dvojitým poľom<input type="checkbox" id="dbl" checked></label>
+  <button id="st" class="go">Začať hru</button>
+ </div>
+ <div class="mut" style="margin:6px 2px">Skóre zadávaš ťuknutím na terč alebo kamerou, kamera navrhne zásah a ty ho opravíš. Bot hrá za posledného hráča.</div>
+ <div class="mut" id="ver" style="text-align:center;margin-top:12px"></div>
+</div>
+
+<div id="game" hidden>
+ <div class="bar"><b id="gt"></b><span class="sp"></span><button id="bv" class="ib on">🔊</button><button id="nw" class="ib">Nová hra</button></div>
+ <div id="sb"></div>
+ <div class="turn"><span id="tn"></span><span id="ds"></span></div>
+ <div id="co"></div>
+ <div id="sm" class="panel" hidden></div>
+ <svg id="bd" viewBox="-146 -146 292 292"><g id="bg"></g><g id="mk"></g></svg>
+ <div class="row"><button id="bz">Mimo terč</button><button id="bu">↶ Späť</button></div>
+ <div id="ms" class="mut" role="status"></div>
+
+ <div class="row"><button id="bc">📷 Kamera</button><button id="bcal">🎯 Kalibrovať</button><button id="bb">📸 Základ</button></div>
+ <div id="cam"><video id="v" playsinline muted></video><canvas id="o"></canvas></div>
+ <div class="row"><button id="ba" class="on">Auto zap.</button><button id="bs">🔍</button><button id="bk">✓ Potvrdiť</button></div>
+ <details>
+  <summary>Ako funguje kamera</summary>
+  <div class="mut" style="margin-top:6px">Zapni kameru tak, aby bol celý terč vidieť a číslo 20 bolo hore. Kalibruj štyri body na vonkajšom okraji dvojitého poľa a ulož základ bez šípok. Potom už len hádž: kamera zachytí každý šíp sama, keď sa pri terči prestane hýbať ruka. Po treťom šípe vytiahni šípky a hra pokračuje automaticky. Ak šíp nesedí, daj Späť, ťukni na správne miesto v obraze kamery a potvrď ✓. Tlačidlo 🔍 je ručné hľadanie šípu.</div>
+ </details>
+ <details>
+  <summary>Klávesnica</summary>
+  <div class="row" id="ml" style="margin-top:8px"><button data-m="1" class="on">Single</button><button data-m="2">Double</button><button data-m="3">Triple</button></div>
+  <div class="pad" id="pad"></div>
+ </details>
+ <div id="vi" class="mut"></div>
+ <button id="bi" hidden style="margin-top:6px">Nainštalovať hlas</button>
+</div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const ORD=[20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+const CP=["1/4 hore: vonkajší okraj dvojitého poľa medzi 20 a 1","2/4 vpravo: medzi 6 a 13","3/4 dole: medzi 3 a 19","4/4 vľavo: medzi 11 a 8"];
+const BP=[9,81,189,261].map(a=>[170*Math.sin(a*Math.PI/180),-170*Math.cos(a*Math.PI/180)]);
+const V=$("#v"),O=$("#o"),ox=O.getContext("2d"),c2=document.createElement("canvas"),x2=c2.getContext("2d",{willReadFrequently:true});
+let S=null,mult=1,H=null,Hi=null,cal=[],calOn=false,P=null,base=null;
+
+let quiet=false,EM=null,prev=null,still=0,auto=true,LB=null;
+function say(t){if(!quiet)$("#ms").textContent=t}
+
+/* ---------- geometria ---------- */
+function homog(s,d){
+ const A=[],b=[];
+ for(let i=0;i<4;i++){const[x,y]=s[i],[X,Y]=d[i];
+  A.push([x,y,1,0,0,0,-X*x,-X*y]);b.push(X);
+  A.push([0,0,0,x,y,1,-Y*x,-Y*y]);b.push(Y)}
+ for(let i=0;i<8;i++){
+  let m=i;for(let r=i+1;r<8;r++)if(Math.abs(A[r][i])>Math.abs(A[m][i]))m=r;
+  [A[i],A[m]]=[A[m],A[i]];[b[i],b[m]]=[b[m],b[i]];
+  for(let r=0;r<8;r++)if(r!==i){const f=A[r][i]/A[i][i];for(let c=i;c<8;c++)A[r][c]-=f*A[i][c];b[r]-=f*b[i]}}
+ return b.map((v,i)=>v/A[i][i]);
+}
+function ap(h,x,y){const w=h[6]*x+h[7]*y+1;return[(h[0]*x+h[1]*y+h[2])/w,(h[3]*x+h[4]*y+h[5])/w]}
+function sc(bx,by){
+ const r=Math.hypot(bx,by);
+ if(r>170)return{n:0,m:0};
+ if(r<6.35)return{n:25,m:2};
+ if(r<15.9)return{n:25,m:1};
+ let a=Math.atan2(bx,-by)*180/Math.PI;a=(a+369)%360;
+ return{n:ORD[Math.floor(a/18)],m:r>162?2:(r>99&&r<107)?3:1};
+}
+function lab(n,m){return n===0?"0":n===25?(m===2?"Bull":"25"):(m===3?"T":m===2?"D":"")+n}
+function proposal(){if(!P||!Hi)return null;const[bx,by]=ap(Hi,P[0],P[1]);return sc(bx,by)}
+
+/* ---------- hra ---------- */
+function snap(){S.hist.push(JSON.stringify({p:S.p,cur:S.cur,darts:S.darts,start:S.start,win:S.win,idx:S.idx,hits:S.hits,thr:S.thr,att:S.att,ok:S.ok}))}
+/* ---------- odporúčania a hlas ---------- */
+let voice=true;
+const DA=[];for(let i=1;i<=20;i++)DA.push({l:""+i,v:i},{l:"D"+i,v:2*i},{l:"T"+i,v:3*i});DA.push({l:"25",v:25},{l:"Bull",v:50});
+const PD=[20,16,8,10,12,18,4,14,6,2,1,19,17,15,13,11,9,7,5,3];
+const fp=(l,dbl)=>dbl?(l==="Bull"?4:PD.indexOf(+l.slice(1))):(l[0]==="T"?2:l[0]==="D"?1:0);
+function co0(r,n,dbl){
+ if(r<1||r>(dbl?170:180)||n<1)return null;
+ const fin=new Map();
+ for(const d of DA){
+  if(dbl&&d.l[0]!=="D"&&d.l!=="Bull")continue;
+  const o=fin.get(d.v);if(!o||fp(d.l,dbl)<fp(o.l,dbl))fin.set(d.v,d);
+ }
+ let best=null,bs=1e9;
+ const test=seq=>{
+  const o=fin.get(r-seq.reduce((a,d)=>a+d.v,0));if(!o)return;
+  const sc=(seq.length+1)*1000+fp(o.l,dbl)*5+seq.reduce((a,d)=>a+(60-d.v)/4+(d.l[0]==="D"?.01:d.l[0]==="T"?.02:0),0);
+  if(sc<bs){bs=sc;best=[...seq.map(d=>d.l),o.l]}
+ };
+ test([]);
+ if(n>1)for(const a of DA){test([a]);if(n>2)for(const b of DA)test([a,b])}
+ return best;
+}
+function hn(){return S&&S.win==null?co(S.p[S.cur].left,3-S.darts.length,S.dbl):null}
+function hintText(){
+ if(!S||S.win!=null)return "";
+ const h=hn();if(h)return "Ukončenie: "+h.join(", ");
+ const g=co(S.p[S.cur].left,3,S.dbl);
+ return g&&S.darts.length?"V tomto kole sa nedá ukončiť. Ďalšie kolo: "+g.join(", "):"";
+}
+function spk(l){return l==="Bull"?"stred":l==="25"?"vonkajší stred":l==="0"?"mimo":l[0]==="T"?"trojnásobok "+l.slice(1):l[0]==="D"?"dvojnásobok "+l.slice(1):l}
+const bodov=v=>v===1?"bod":v>=2&&v<=4?"body":"bodov";
+function nxt(){return "hráč "+(S.cur+1)+"."}
+function hintSay(){const h=hn();return h?" Ukončenie: "+h.map(spk).join(", ")+".":""}
+let VO=null,NL=null;
+const NT=()=>{const c=window.Capacitor;return c&&c.Plugins&&c.Plugins.TextToSpeech};
+function pickVoice(){
+ if(NT())return;
+ try{const v=speechSynthesis.getVoices();VO=v.find(x=>/^sk/i.test(x.lang))||v.find(x=>/^cs/i.test(x.lang))||null}catch(e){}
+ $("#vi").textContent=VO?"Hlas: "+VO.name+" ("+VO.lang+")":"Slovenský ani český hlas sa nenašiel (alebo ho telefón nezverejňuje). Nainštaluj ho: Nastavenia, Text-to-speech, Google, slovenčina.";
+}
+if("speechSynthesis" in window){speechSynthesis.onvoiceschanged=pickVoice;pickVoice()}
+async function pickNative(){
+ const T=NT();if(!T)return;
+ for(const l of["sk-SK","cs-CZ"]){
+  try{if((await T.isLanguageSupported({lang:l})).supported){NL=l;break}}catch(e){}
+ }
+ $("#vi").textContent=NL?"Hlas: "+(NL==="sk-SK"?"slovenčina":"čeština")+" (telefón)":"V telefóne chýba slovenský aj český hlas. Ťukni na Nainštalovať hlas.";
+ $("#bi").hidden=!!NL;
+}
+$("#bi").onclick=()=>{try{NT().openInstall()}catch(e){}};
+pickNative();
+function talk(t){
+ if(!voice)return;
+ const T=NT();
+ if(T){try{T.speak({text:t,lang:NL||"sk-SK",rate:1,pitch:1,volume:1,queueStrategy:0}).catch(()=>{})}catch(e){}return}
+ if(!("speechSynthesis" in window))return;
+ try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);if(VO){u.voice=VO;u.lang=VO.lang.replace("_","-")}else u.lang="sk-SK";speechSynthesis.speak(u)}catch(e){}
+}
+$("#bv").onclick=()=>{
+ voice=!voice;$("#bv").classList.toggle("on",voice);$("#bv").textContent=voice?"🔊":"🔇";
+ if(voice)talk("Hlas zapnutý.");else{try{speechSynthesis.cancel()}catch(e){}try{NT().stop()}catch(e){}}
+};
+function endTurn(extra){
+ const wb=S.p[S.cur].bot;S.cur=(S.cur+1)%S.p.length;S.darts=[];S.start=S.p[S.cur].left;base=null;P=null;draw();
+ say((extra||"")+(V.videoWidth&&!wb?" Vytiahni šípky, kamera to zistí sama (alebo ulož základ 📸).":""));
+}
+const avg=p=>(p.n?p.pts/p.n*3:0).toFixed(1).replace(".",",");
+function newT(){
+ const p=S.p[0];let r;
+ do r=2+Math.floor(Math.random()*169);while(!co(r,3,S.dbl));
+ p.left=S.start=r;
+}
+function tgl(){const t=S.idx<20?S.idx+1:25;return t===25?"Bull":S.mode==="around"?""+t:"D"+t}
+function trainHit(n,m){
+ snap();
+ const tg=S.idx<20?S.idx+1:25,ok=n===tg&&(S.mode==="around"||m===2);
+ S.thr++;S.darts.push(lab(n,m));
+ if(ok){S.hits++;S.idx++}
+ let t=spk(lab(n,m))+".";
+ if(S.idx>=21){S.win=0;render();return talk(t+" Zásah! Hotovo za "+S.thr+" šípov. Presnosť "+Math.round(100*S.hits/S.thr)+" percent.")}
+ t+=ok?" Zásah! Ďalší cieľ "+spk(tgl())+".":" Cieľ stále "+spk(tgl())+".";
+ if(S.darts.length===3){render();endTurn("Tri šípy hotové.");render()}else{say("");render()}
+ talk(t);
+}
+function hit0(n,m){
+ if(!S||S.win!=null)return;
+ if(S.mode==="around"||S.mode==="doubles")return trainHit(n,m);
+ snap();
+ const i=S.cur,p=S.p[i],v=n*m,rest=p.left-v,ck=S.mode==="checkout";
+ S.darts.push(lab(n,m));p.n++;
+ const t=p.name+", "+spk(lab(n,m))+(v?", "+v+" "+bodov(v):"")+".";
+ const bust=rest<0||(S.dbl&&(rest===1||(rest===0&&m!==2)));
+ if(bust){
+  p.pts-=S.start-p.left;p.left=S.start;
+  const b=p.name+": prestrelené, skóre sa vracia na "+p.left+".";
+  if(ck){S.att++;render();endTurn("Neúspech.");newT();render();return talk(t+" Neúspech. Nový cieľ "+p.left+"."+hintSay())}
+  render();endTurn(b);render();
+  return talk(t+" Prestrelené. Zostáva "+p.left+". Na rade "+nxt()+hintSay());
+ }
+ p.left=rest;p.pts+=v;
+ if(rest===0){
+  p.best=Math.max(p.best,S.start);
+  if(ck){S.att++;S.ok++;render();endTurn("Úspech!");newT();render();return talk(t+" Úspech! Nový cieľ "+p.left+"."+hintSay())}
+  S.win=i;say("");render();
+  return talk(t+" "+p.name+" vyhráva. Gratulujem! Priemer "+Math.round(p.pts/p.n*3)+" bodov.");
+ }
+ if(S.darts.length===3){
+  const tot=S.start-rest;p.best=Math.max(p.best,tot);
+  if(ck){S.att++;render();endTurn("Neúspech.");newT();render();return talk(t+" Neúspech. Nový cieľ "+p.left+"."+hintSay())}
+  render();endTurn("Tri šípy hotové.");render();
+  return talk(t+" Spolu "+tot+" "+bodov(tot)+". Zostáva "+rest+". Na rade "+nxt()+hintSay());
+ }
+ say("");render();
+ talk(t+" Zostáva "+rest+"."+hintSay());
+}
+function render(){
+ $("#co").textContent=hintText();
+ $("#gt").textContent=S.title;
+ const m=S.mode,tr=m==="around"||m==="doubles",w=S.win!=null;
+ if(tr){
+  $("#sb").innerHTML=`<div class="tile cur"><div class="nm">${m==="around"?"Okolo hodín":"Double tréning"}</div><div class="big">${w?"✓":tgl()}</div><div class="mut">zásahy ${S.hits} z 21, šípov ${S.thr}${S.thr?", presnosť "+Math.round(100*S.hits/S.thr)+" %":""}</div></div>`;
+  $("#tn").textContent=w?"Hotovo za "+S.thr+" šípov":"Šíp "+(S.darts.length+1)+" z 3";
+ }else{
+  $("#sb").innerHTML=S.p.map((p,i)=>`<div class="tile${i===S.cur&&!w?" cur":""}"><div class="nm">${p.bot?"🤖 ":""}${p.name}${S.win===i?" 🏆":""}</div><div class="big">${p.left}</div><div class="mut">${p.n?"priemer "+avg(p)+", šípov "+p.n:"&nbsp;"}</div></div>`).join("");
+  $("#tn").textContent=w?"Víťaz: "+S.p[S.win].name+" 🎉":m==="checkout"?"Tréning ukončenia: úspešné "+S.ok+" z "+S.att+(S.att?" ("+Math.round(100*S.ok/S.att)+" %)":"")+", šíp "+(S.darts.length+1)+" z 3":"Na rade: "+S.p[S.cur].name+", šíp "+(S.darts.length+1)+" z 3";
+ }
+ $("#ds").innerHTML=S.darts.map(d=>`<span class="chip">${d}</span>`).join("");
+ drawMarks();
+ const sm=$("#sm");sm.hidden=!(w&&m==="x01");
+ if(!sm.hidden)sm.innerHTML="<b>Štatistika</b>"+S.p.map(p=>`<div>${p.name}: priemer ${avg(p)} (3 šípy), šípov ${p.n}, najlepšie kolo ${p.best}</div>`).join("");
+}
+$("#st").onclick=()=>{
+ const g=$("#g").value,tr=isNaN(+g),N=tr?0:+g,bl=tr?0:+$("#bot").value;
+ let n=tr?1:+$("#n").value;if(bl&&n<2)n=2;
+ const dbl=$("#dbl").checked;base=null;
+ S={mode:tr?g:"x01",title:tr?{around:"Okolo hodín",doubles:"Double tréning",checkout:"Tréning ukončenia"}[g]:g+(dbl?", double out":", any out"),dbl,
+  p:Array.from({length:n},(_,i)=>{const b=bl&&i===n-1?bl:0;return{name:b?"Bot "+b:"Hráč "+(i+1),left:N,pts:0,n:0,best:0,bot:b}}),
+  cur:0,darts:[],start:N,win:null,hist:[],att:0,ok:0,idx:0,hits:0,thr:0,busy:false};
+ if(g==="checkout")newT();
+ $("#setup").hidden=true;$("#game").hidden=false;render();say("");
+ talk(tr?(g==="around"?"Tréning okolo hodín. Cieľ 1.":g==="doubles"?"Tréning double. Cieľ dvojnásobok 1.":"Tréning ukončenia. Cieľ "+S.p[0].left+"."+hintSay()):"Hra "+N+" začína. Na rade hráč 1.");
+ maybeBot();
+};
+$("#nw").onclick=()=>{$("#game").hidden=true;$("#setup").hidden=false;P=null;draw()};
+$("#bu").onclick=()=>{if(!S||S.busy)return;const h=S.hist.pop();if(h){Object.assign(S,JSON.parse(h));P=null;draw();render();say("Posledný šíp vrátený.");maybeBot()}};
+
+/* ---------- klávesnica ---------- */
+$("#pad").innerHTML=[...Array(20)].map((_,i)=>`<button data-n="${i+1}">${i+1}</button>`).join("")+`<button data-n="25" data-b="1" style="grid-column:span 2">25</button><button data-n="25" data-b="2" class="p" style="grid-column:span 2">Bull 50</button><button data-n="0">Mimo</button>`;
+$("#pad").onclick=e=>{
+ const n=e.target.dataset.n;if(n===undefined||!S)return;
+ const k=+n,b=+e.target.dataset.b;
+ hit(k,k===25?b:k?mult:0);setMult(1);if(base&&V.videoWidth)base=grab();
+};
+function setMult(m){mult=m;document.querySelectorAll("#ml button").forEach(b=>b.classList.toggle("on",+b.dataset.m===m))}
+$("#ml").onclick=e=>{if(e.target.dataset.m)setMult(+e.target.dataset.m)};
+
+/* ---------- kamera ---------- */
+$("#bc").onclick=async()=>{
+ const tries=[{video:{facingMode:{ideal:"environment"},width:{ideal:1280}},audio:false},{video:true,audio:false}];
+ let err=null;
+ for(const c of tries){
+  try{
+   const s=await navigator.mediaDevices.getUserMedia(c);
+   V.srcObject=s;$("#cam").style.display="block";await V.play();
+   if(!V.videoWidth)await new Promise(r=>V.onloadedmetadata=r);
+   O.width=V.videoWidth;O.height=V.videoHeight;
+   try{await navigator.wakeLock.request("screen")}catch(e){}
+   return say("Kamera beží. Ďalej kalibruj (🎯).");
+  }catch(e){err=e}
+ }
+ const n=(err&&err.name)||"chyba";
+ say("Kamera sa nespustila ("+n+"). "+(n==="NotFoundError"?"Zariadenie kameru nenašlo.":n==="NotReadableError"?"Kameru používa iná aplikácia.":"Kamera je pravdepodobne zablokovaná: povoľ ju pre túto stránku, alebo ak je stránka vložená v aplikácii, otvor ju priamo v prehliadači."));
+};
+function grab(){
+ const w=240,h=Math.round(240*V.videoHeight/V.videoWidth);
+ c2.width=w;c2.height=h;x2.drawImage(V,0,0,w,h);
+ const d=x2.getImageData(0,0,w,h).data,g=new Uint8Array(w*h);
+ for(let i=0;i<w*h;i++)g[i]=d[4*i]*.3+d[4*i+1]*.59+d[4*i+2]*.11;
+ return{g,w,h};
+}
+$("#bcal").onclick=()=>{
+ if(!V.videoWidth)return say("Najprv zapni kameru.");
+ cal=[];H=Hi=null;P=null;calOn=true;say(CP[0]);draw();
+};
+$("#bb").onclick=()=>{
+ if(!V.videoWidth)return say("Najprv zapni kameru.");
+ base=grab();EM=base;prev=null;still=0;say("Základ uložený. Hoď šíp, kamera ho zachytí sama.");
+};
+O.onclick=e=>{
+ const r=O.getBoundingClientRect(),x=(e.clientX-r.left)*O.width/r.width,y=(e.clientY-r.top)*O.height/r.height;
+ if(calOn){
+  cal.push([x,y]);
+  if(cal.length<4)say(CP[cal.length]);
+  else{
+   calOn=false;
+   Hi=homog(cal,BP);H=homog(BP,cal);
+   if(Hi.every(isFinite)&&H.every(isFinite))say("Kalibrácia hotová. Zelená sieť má sedieť na terči, inak kalibruj znova.");
+   else{H=Hi=null;say("Kalibrácia zlyhala. Skús body zadať znova.")}
+  }
+ }else if(Hi){
+  P=[x,y];const q=proposal();say("Zásah: "+lab(q.n,q.m)+" ("+q.n*q.m+"). Potvrď tlačidlom ✓.");
+ }
+ draw();
+};
+function draw(){
+ if(!O.width)return;
+ ox.clearRect(0,0,O.width,O.height);
+ const u=O.width/400;ox.lineWidth=u;
+ if(H){
+  ox.strokeStyle="rgba(60,230,130,.85)";
+  for(const r of[170,162,107,99,15.9,6.35]){
+   ox.beginPath();
+   for(let a=0;a<=360;a+=6){const[x,y]=ap(H,r*Math.sin(a*Math.PI/180),-r*Math.cos(a*Math.PI/180));a?ox.lineTo(x,y):ox.moveTo(x,y)}
+   ox.stroke();
+  }
+  ox.beginPath();
+  for(let i=0;i<20;i++){
+   const t=(i*18+9)*Math.PI/180;
+   ox.moveTo(...ap(H,15.9*Math.sin(t),-15.9*Math.cos(t)));
+   ox.lineTo(...ap(H,170*Math.sin(t),-170*Math.cos(t)));
+  }
+  ox.stroke();
+ }
+ ox.fillStyle="#ff3b30";
+ for(const[x,y]of cal){ox.beginPath();ox.arc(x,y,4*u,0,7);ox.fill()}
+ if(P){ox.strokeStyle="#ffd60a";ox.lineWidth=2*u;ox.beginPath();ox.arc(P[0],P[1],7*u,0,7);ox.stroke()}
+}
+
+/* ---------- detekcia šípu ---------- */
+function scanOnce(){
+ if(!Hi)return say("Najprv kalibruj kameru.");
+ if(!base)return say("Najprv ulož základ (📸), keď v terči nie sú šípky.");
+ const f=grab(),w=f.w,h=f.h;
+ if(base.w!==w||base.h!==h)return say("Zmenilo sa rozlíšenie kamery, ulož základ znova.");
+ const k=V.videoWidth/w,m=new Uint8Array(w*h);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const i=y*w+x;
+  if(Math.abs(f.g[i]-base.g[i])>32){const[bx,by]=ap(Hi,x*k,y*k);if(bx*bx+by*by<175*175)m[i]=1}
+ }
+ let best=null;
+ for(let i=0;i<w*h;i++){
+  if(m[i]!==1)continue;
+  const st=[i],c=[];m[i]=2;
+  while(st.length){
+   const j=st.pop();c.push(j);const x=j%w;
+   for(const q of[j-1,j+1,j-w,j+w]){
+    if(q<0||q>=w*h||m[q]!==1)continue;
+    if((q===j-1&&x===0)||(q===j+1&&x===w-1))continue;
+    m[q]=2;st.push(q);
+   }
+  }
+  if(!best||c.length>best.length)best=c;
+ }
+ if(!best||best.length<15){LB=null;P=null;draw();return say("Nový šíp som nenašiel. Ťukni na obraz na miesto šípu.")}
+ LB={c:best,w,g:f.g};let my=0;for(const j of best)my=Math.max(my,Math.floor(j/w));
+ let sx=0,n=0;for(const j of best)if(Math.floor(j/w)>=my-1){sx+=j%w;n++}
+ P=[sx/n*k,(my+.5)*k];draw();
+ const q=proposal();
+ say("Navrhnutý zásah: "+lab(q.n,q.m)+" ("+q.n*q.m+"). Potvrď ✓ alebo ťukni na správne miesto.");
+};
+$("#bk").onclick=()=>{
+ const q=proposal();
+ if(!q)return say("Nie je čo potvrdiť. Najprv nájdi šíp alebo ťukni na obraz.");
+ P=null;draw();hit(q.n,q.m);if(base&&V.videoWidth)base=grab();
+};
+/* ---------- automatika ---------- */
+$("#bs").onclick=scanOnce;
+$("#ba").onclick=()=>{auto=!auto;$("#ba").classList.toggle("on",auto);$("#ba").textContent=auto?"Auto zap.":"Auto vyp.";prev=null;still=0};
+function dcount(a,b){
+ const w=a.w,k=V.videoWidth/w;let n=0;
+ for(let y=0;y<a.h;y++)for(let x=0;x<w;x++){const i=y*w+x;
+  if(Math.abs(a.g[i]-b.g[i])>32){const[bx,by]=ap(Hi,x*k,y*k);if(bx*bx+by*by<175*175)n++}}
+ return n;
+}
+function patch(){
+ const{c,w,g}=LB,h=base.h;
+ for(const j of c){const x=j%w,y=(j/w)|0;
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const X=x+dx,Y=y+dy;if(X>=0&&X<w&&Y>=0&&Y<h)base.g[Y*w+X]=g[Y*w+X]}}
+}
+setInterval(()=>{
+ if(!auto||!Hi||!V.videoWidth||!S||S.win!=null||S.p[S.cur].bot||calOn||!EM)return;
+ const f=grab();
+ if(prev&&prev.w===f.w&&prev.h===f.h){
+  let n=0;for(let i=0;i<f.g.length;i++)if(Math.abs(f.g[i]-prev.g[i])>25)n++;
+  still=n>f.g.length*.004?0:still+1;
+ }
+ prev=f;
+ if(still<4||(base&&still!==4))return;
+ if(!base){
+  if(EM.w===f.w&&EM.h===f.h&&dcount(f,EM)<12){base=f;EM=f;P=null;draw();say("Na rade: "+S.p[S.cur].name+". Hoď šíp.")}
+  return;
+ }
+ for(let t=0;t<3&&S.win==null&&base;t++){
+  P=null;LB=null;quiet=true;
+  try{scanOnce()}finally{quiet=false}
+  if(!P||!LB||LB.c.length>700)break;
+  const q=proposal();patch();draw();
+  hit(q.n,q.m);
+  if(base)say("Zachytené: "+lab(q.n,q.m)+" ("+q.n*q.m+"). Ak nesedí, daj Späť, ťukni na správne miesto a ✓.");
+ }
+},200);
+/* ---------- terč (SVG), ťukanie, boti ---------- */
+const R=[9,18,66,84,112,128];
+const SIG=[[30,31.6],[40,21.3],[50,16.7],[60,13.6],[70,11.4],[80,9.5],[90,7.6],[100,6.4]];
+const CC=new Map();
+function co(r,n,dbl){const k=r+","+n+","+(dbl?1:0);if(!CC.has(k))CC.set(k,co0(r,n,dbl));return CC.get(k)}
+function pt(r,a){const t=a*Math.PI/180;return[r*Math.sin(t),-r*Math.cos(t)]}
+const f1=v=>v.toFixed(1);
+function wedge(r1,r2,a1,a2){
+ const p1=pt(r2,a1),p2=pt(r2,a2),p3=pt(r1,a2),p4=pt(r1,a1);
+ return`M${p1.map(f1)}A${r2} ${r2} 0 0 1 ${p2.map(f1)}L${p3.map(f1)}A${r1} ${r1} 0 0 0 ${p4.map(f1)}Z`;
+}
+function drawBoard(){
+ let g='<g stroke="#0b0e16" stroke-width=".6">';
+ for(let i=0;i<20;i++){
+  const a1=i*18-9,a2=i*18+9,d=i%2===0,sg=d?"#1d2230":"#e6dcc0",rg=d?"#c8102e":"#12945a";
+  g+=`<path d="${wedge(R[1],R[2],a1,a2)}" fill="${sg}"/><path d="${wedge(R[2],R[3],a1,a2)}" fill="${rg}"/><path d="${wedge(R[3],R[4],a1,a2)}" fill="${sg}"/><path d="${wedge(R[4],R[5],a1,a2)}" fill="${rg}"/>`;
+ }
+ g+=`<circle r="${R[1]}" fill="#12945a"/><circle r="${R[0]}" fill="#c8102e"/></g>`;
+ for(let i=0;i<20;i++){const[x,y]=pt(137,i*18);g+=`<text x="${f1(x)}" y="${f1(y+4)}" text-anchor="middle" font-size="11" font-weight="700" fill="#aab3c8">${ORD[i]}</text>`}
+ return g;
+}
+$("#bg").innerHTML=drawBoard();
+$("#bd").onclick=e=>{
+ if(!S||S.win!=null||S.p[S.cur].bot)return;
+ const b=$("#bd").getBoundingClientRect(),k=292/b.width,x=(e.clientX-b.left)*k-146,y=(e.clientY-b.top)*k-146,r=Math.hypot(x,y);
+ if(r>R[5])return;
+ let n,m;
+ if(r<R[0]){n=25;m=2}else if(r<R[1]){n=25;m=1}else{
+  let a=Math.atan2(x,-y)*180/Math.PI;a=(a+369)%360;n=ORD[Math.floor(a/18)];
+  m=r<R[2]?1:r<R[3]?3:r<R[4]?1:2;
+ }
+ hit(n,m);if(base&&V.videoWidth)base=grab();
+};
+$("#bz").onclick=()=>{hit(0,0);if(base&&V.videoWidth)base=grab()};
+function parseL(l){return l==="Bull"?[25,2]:l==="25"?[25,1]:l==="0"?null:l[0]==="T"?[+l.slice(1),3]:l[0]==="D"?[+l.slice(1),2]:[+l,1]}
+function drawMarks(){
+ $("#mk").innerHTML=S.darts.map((l,i)=>{
+  const q=parseL(l);if(!q)return"";
+  let x=0,y=0;
+  if(q[0]===25){if(q[1]===1)[x,y]=pt(13.5,0)}
+  else[x,y]=pt(q[1]===3?75:q[1]===2?120:98,ORD.indexOf(q[0])*18);
+  return`<circle cx="${f1(x)}" cy="${f1(y)}" r="7" fill="#f5b942" stroke="#0f121a" stroke-width="1.5"/><text x="${f1(x)}" y="${f1(y+3.5)}" text-anchor="middle" font-size="9" font-weight="800" fill="#0f121a">${i+1}</text>`;
+ }).join("");
+}
+function sig(a){
+ if(a<=SIG[0][0])return SIG[0][1];
+ for(let i=1;i<SIG.length;i++)if(a<=SIG[i][0]){const[a0,s0]=SIG[i-1],[a1,s1]=SIG[i];return s0+(s1-s0)*(a-a0)/(a1-a0)}
+ return SIG[SIG.length-1][1];
+}
+function aim(l){
+ if(l==="Bull")return[0,0];
+ if(l==="25")return pt(11,0);
+ const q=parseL(l);return pt(q[1]===3?103:q[1]===2?166:130,ORD.indexOf(q[0])*18);
+}
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function maybeBot(){
+ if(!S||S.win!=null||S.busy||S.mode!=="x01"||!S.p[S.cur].bot)return;
+ S.busy=true;setTimeout(botDart,1500);
+}
+function botDart(){
+ if(!S)return;
+ S.busy=false;
+ const p=S.p[S.cur];if(!p.bot||S.win!=null)return;
+ const r=co(p.left,3-S.darts.length,S.dbl)||co(p.left,3,S.dbl),[x,y]=aim(r?r[0]:"T20"),s=sig(p.bot);
+ const q=sc(x+gauss()*s,y+gauss()*s);
+ hit(q.n,q.m,true);
+}
+function hit(n,m,fb){
+ if(!S||S.win!=null||(S.p[S.cur].bot&&!fb))return;
+ hit0(n,m);maybeBot();
+}
+const VER="5";
+$("#ver").textContent="Verzia "+VER;
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
